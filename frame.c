@@ -15,7 +15,7 @@ uint64_t frames_allocated;
 
 uint64_t frames_available;
 
-unsigned long long bitmap[BITMAP_LENGTH];
+uint64_t bitmap[BITMAP_LENGTH];
 
 // No need to change or initialize this. This is "empty" space that simulate your physical memory.
 _Alignas(4096) char memory[MEMORY_SIZE];
@@ -55,6 +55,19 @@ int64_t allocate_frame(int number_frames) {
 int64_t deallocate_frame(uint64_t frame_number, int number_frames) {
     // Mark the frame as deallocated in the bitmap
     // Decrease the frames_allocated, increase frames_available
-
+    if (!frames_allocated)
+        return -1;
+    bitmap[frame_number / BITMAP_LENGTH] &= ~(1UL << frame_number & BITMAP_LENGTH);
     return -1; // Return according to what's documented in the header file for this module
 }
+
+/*
+ * QUESTIONS:
+ *
+ * 1. Are we allocating/deallocating multiple frames, or just one frame?
+ * 2. What are we returning in deallocate_frame? Do we need to check if the one we try to deallocate is not
+ *    already allocated?
+ * 3. Are we doing things right?
+ * 4. What are FRAME_NUMBER and FRAME_ADDRESS for?
+ * 5. _Alignas?
+ */
