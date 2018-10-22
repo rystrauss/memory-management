@@ -1,8 +1,21 @@
+/**
+ * Functions for handling frame allocation.
+ *
+ * @author Ryan Strauss
+ * @author Niall Williams
+ */
+
 #include "frame.h"
+
+#define NUM_FRAMES 1024
+#define BITMAP_LENGTH 16
+#define BIT_VALUE(ll, i) ((ll << (63 - i)) >> 63)
 
 uint64_t frames_allocated;
 
 uint64_t frames_available;
+
+unsigned long long bitmap[BITMAP_LENGTH];
 
 // No need to change or initialize this. This is "empty" space that simulate your physical memory.
 _Alignas(4096) char memory[MEMORY_SIZE];
@@ -13,12 +26,29 @@ _Alignas(4096) char memory[MEMORY_SIZE];
 void frame_init() {
     // Initialize global variables
     // Initialize the bitmap
+    frames_allocated = 0;
+    frames_available = NUM_FRAMES;
+
+    for (int i = 0; i < NUM_FRAMES; ++i) {
+        bitmap[i] = 0;
+    }
 }
 
 int64_t allocate_frame(int number_frames) {
     // Consult the bitmap and return the first available frame number, marking it as allocated
     // Increase the frames_allocated, decrease frames_available
-
+    if (!frames_available)
+        return -1;
+    for (int i = 0; i < BITMAP_LENGTH; ++i) {
+        for (int j = 0; j < 64; ++j) {
+            if (!BIT_VALUE(bitmap[i], j)) {
+                bitmap[i] |= 1ULL << j;
+                frames_allocated++;
+                frames_available--;
+                return i * 64 + j;
+            }
+        }
+    }
     return -1; // Return according to what's documented in the header file for this module
 }
 
