@@ -36,7 +36,7 @@ int64_t allocate_frame(int number_frames);
  *
  * @param number_frames Number of consecutive frames to be deallocated.
  *
- * @return The number of the first allocated frame, or -1 if no frame is available.
+ * @return The number of frames deallocated, or -1 if any of the frames were not already allocated.
  */
 int64_t deallocate_frame(uint64_t frame_number, int number_frames);
 

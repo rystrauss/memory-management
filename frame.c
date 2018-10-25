@@ -8,7 +8,7 @@
 #include "frame.h"
 
 #define NUM_FRAMES 1024
-#define BITMAP_LENGTH 16
+#define BITMAP_LENGTH NUM_FRAMES / 64
 #define BIT_VALUE(ll, i) ((ll << (63 - i)) >> 63)
 
 uint64_t frames_allocated;
@@ -39,15 +39,13 @@ int64_t allocate_frame(int number_frames) {
     // Increase the frames_allocated, decrease frames_available
     if (!frames_available)
         return -1;
-    for (int i = 0; i < BITMAP_LENGTH; ++i) {
-        for (int j = 0; j < 64; ++j) {
-            if (!BIT_VALUE(bitmap[i], j)) {
-                bitmap[i] |= 1ULL << j;
-                frames_allocated++;
-                frames_available--;
-                return i * 64 + j;
-            }
-        }
+    int index = 0, start = 0;
+    while (index < NUM_FRAMES) {
+        if (index - start == number_frames)
+            return start;
+        if (BIT_VALUE(bitmap[index / BITMAP_LENGTH], index % 64))
+            start = index + 1;
+        index++;
     }
     return -1; // Return according to what's documented in the header file for this module
 }
@@ -57,17 +55,11 @@ int64_t deallocate_frame(uint64_t frame_number, int number_frames) {
     // Decrease the frames_allocated, increase frames_available
     if (!frames_allocated)
         return -1;
-    bitmap[frame_number / BITMAP_LENGTH] &= ~(1UL << frame_number & BITMAP_LENGTH);
-    return -1; // Return according to what's documented in the header file for this module
+    int ret_val = number_frames;
+    for (int i = 0; i < number_frames; ++i) {
+        if (!BIT_VALUE(bitmap[i / BITMAP_LENGTH], i % 64))
+            ret_val = -1;
+        bitmap[frame_number / BITMAP_LENGTH] &= ~(1UL << frame_number & BITMAP_LENGTH);
+    }
+    return ret_val; // Return according to what's documented in the header file for this module
 }
-
-/*
- * QUESTIONS:
- *
- * 1. Are we allocating/deallocating multiple frames, or just one frame?
- * 2. What are we returning in deallocate_frame? Do we need to check if the one we try to deallocate is not
- *    already allocated?
- * 3. Are we doing things right?
- * 4. What are FRAME_NUMBER and FRAME_ADDRESS for?
- * 5. _Alignas?
- */
