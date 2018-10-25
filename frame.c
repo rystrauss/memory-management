@@ -52,11 +52,11 @@ int64_t allocate_frame(int number_frames) {
             frames_allocated += number_frames;
             frames_available -= number_frames;
             for (int i = start; i < index; ++i) {
-                bit_on(&bitmap[i / BITMAP_LENGTH], i % 64);
+                bit_on(&bitmap[i / 64], i % 64);
             }
             return start;
         }
-        if (BIT_VALUE(bitmap[index / BITMAP_LENGTH], index % 64))
+        if (BIT_VALUE(bitmap[index / 64], index % 64))
             start = index + 1;
         index++;
     }
@@ -70,10 +70,10 @@ int64_t deallocate_frame(uint64_t frame_number, int number_frames) {
         return -1;
     int ret_val = number_frames;
     for (uint64_t i = frame_number; i < frame_number + number_frames; ++i) {
-        if (!BIT_VALUE(bitmap[i / BITMAP_LENGTH], i % 64))
+        if (!BIT_VALUE(bitmap[i / 64], i % 64))
             ret_val = -1;
         else {
-            bit_off(&bitmap[frame_number / BITMAP_LENGTH], i);
+            bit_off(&bitmap[frame_number / 64], i);
             frames_available++;
             frames_allocated--;
         }
