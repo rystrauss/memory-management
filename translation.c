@@ -3,6 +3,8 @@
 #include "translation.h"
 #include "frame.h"
 
+#define MAXPAGES 281474976710656
+
 void *root_table = NULL;
 
 entry *make_table() {
@@ -72,11 +74,33 @@ int vm_unmap(uint64_t page, int number) {
 }
 
 uint64_t vm_locate(int number) {
-    
-    return -1;
+    uint64_t start = 0;
+    int consecutive = 0;
+    for (uint64_t page = 0; page < MAXPAGES; ++page) {
+        if (consecutive == number) {
+            return start;
+        }
+        entry *cur = root_table;
+        for (int i = 0; i < 3; ++i) {
+            uint64_t index = ((page) << (12 + i * 9)) >> ((3 - i) * 9 + 12);
+            entry next = *(cur + index);
+            if (next.flags) {
+                consecutive = 0;
+                break;
+            }
+            cur = (entry *) next.address;
+        }
+        if (!cur->flags) {
+            if (!consecutive) {
+                start = page;
+            }
+            consecutive++;
+        }
+    }
+    return (uint64_t) 0;
 }
 
 uint64_t vm_translate(uint64_t virtual_address) {
-    // Dummy code: there's no translation being done
+    // TODO: What does this return if a table hasn't been mapped yet?
     return virtual_address;
 }
