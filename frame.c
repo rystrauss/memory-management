@@ -73,7 +73,7 @@ int64_t deallocate_frame(uint64_t frame_number, int number_frames) {
         if (!BIT_VALUE(bitmap[i / 64], i % 64))
             ret_val = -1;
         else {
-            bit_off(&bitmap[frame_number / 64], i);
+            bit_off(&bitmap[i / 64], i % 64);
             frames_available++;
             frames_allocated--;
         }
