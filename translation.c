@@ -31,7 +31,7 @@ int vm_map(uint64_t page, uint64_t frame, int number, uint16_t flags) {
     for (int j = 0; j < number; ++j) {
         entry *cur = root_table;
         for (int i = 0; i < 3; ++i) {
-            uint64_t index = ((page + j) << (12 + i * 9)) >> ((12 + i * 9) + (3 - i) * 9);
+            uint64_t index = ((page + j) >> (3 - i) * 9) & 0b111111111;
             entry *next = cur + index;
             if (!next->flags) {
                 entry *new_table = make_table();
@@ -43,7 +43,7 @@ int vm_map(uint64_t page, uint64_t frame, int number, uint16_t flags) {
             }
             cur = (entry *) next->address;
         }
-        uint64_t index = ((page + j) << (12 + 3 * 9)) >> (12 + 3 * 9);
+        uint64_t index = (page + j) & 0b111111111;
         uint64_t offset = (page + j) >> 35;
         (cur + index)->flags = 1;
         (cur + index)->address = (uint64_t) FRAME_ADDRESS(frame + j) + offset;
@@ -53,20 +53,20 @@ int vm_map(uint64_t page, uint64_t frame, int number, uint16_t flags) {
 }
 
 int vm_unmap(uint64_t page, int number) {
-    entry *cur = root_table;
-    if (!cur) {
+    if (!root_table) {
         return 0;
     }
     for (int j = 0; j < number; ++j) {
+        entry *cur = root_table;
         for (int i = 0; i < 3; ++i) {
-            uint64_t index = ((page + j) << (12 + i * 9)) >> ((12 + i * 9) + (3 - i) * 9);
+            uint64_t index = ((page + j) >> (3 - i) * 9) & 0b111111111;
             entry *next = cur + index;
             if (!next->flags) {
                 return 0;
             }
             cur = (entry *) next->address;
         }
-        uint64_t index = ((page + j) << (12 + 3 * 9)) >> (12 + 3 * 9);
+        uint64_t index = (page + j) & 0b111111111;
         (cur + index)->flags = 0;
     }
 
@@ -74,8 +74,9 @@ int vm_unmap(uint64_t page, int number) {
 }
 
 uint64_t vm_locate(int number) {
-    if (number < 1)
+    if (number < 1 || root_table == NULL) {
         return UINT64_MAX;
+    }
     uint64_t start = 0;
     int consecutive = 0;
     for (uint64_t page = 0; page < MAXPAGES; ++page) {
@@ -84,33 +85,40 @@ uint64_t vm_locate(int number) {
         }
         entry *cur = root_table;
         for (int i = 0; i < 3; ++i) {
-            uint64_t index = ((page) << (12 + i * 9)) >> ((12 + i * 9) + (3 - i) * 9);
+            uint64_t index = (page >> (3 - i) * 9) & 0b111111111;
             entry *next = cur + index;
-            if (next->flags) {
-                consecutive = 0;
-                break;
-            }
             cur = (entry *) next->address;
         }
-        if (!cur->flags) {
+        uint64_t index = page & 0b111111111;
+        if (!(cur + index)->flags) {
             if (!consecutive) {
                 start = page;
             }
             consecutive++;
+        } else {
+            consecutive = 0;
         }
     }
     return UINT64_MAX;
 }
 
 uint64_t vm_translate(uint64_t virtual_address) {
+    if (!root_table) {
+        return UINT64_MAX;
+    }
     entry *cur = root_table;
     for (int i = 0; i < 3; ++i) {
-        uint64_t index = ((virtual_address) << (12 + i * 9)) >> ((12 + i * 9) + (3 - i) * 9);
+        uint64_t index = (virtual_address >> (3 - i) * 9) & 0b111111111;
         entry *next = cur + index;
         if (!next->flags) {
             return UINT64_MAX;
         }
         cur = (entry *) next->address;
     }
-    return cur->address;
+    uint64_t index = virtual_address & 0b111111111;
+    entry *next = cur + index;
+    if (!next->flags) {
+        return UINT64_MAX;
+    }
+    return next->address;
 }
