@@ -17,6 +17,14 @@ typedef struct entry_t_ entry;
 /// 4-level page table implementing the translation from virtual to physical
 extern void *table_root;
 
+/**
+ * 1. We multiply by 4096 because that is the size of a frame, so doing this will result in the actual memory address
+ *    of the given frame.
+ * 2. We add the base memory address because our memory does not start at zero, like what would happen in an
+ *    actual kernel.
+ * 3. In a real kernel, the program has access to the computer's entire memory, which begins at address zero, so
+ *    summing the base address is actually just adding zero.
+ */
 #define PAGE_NUMBER(address) ((address - memory) / 4096)
 #define PAGE_ADDRESS(frame) ((memory + (frame * 4096)))
 

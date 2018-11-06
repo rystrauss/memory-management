@@ -1,19 +1,24 @@
 #include "kmalloc.h"
+#include "translation.h"
+#include "frame.h"
 
 // After you are done, you don't need to import it anymore. This is here just for the dummy code on malloc/free.
 #include<stdlib.h>
+#include <stdio.h>
 
 void *palloc(uint64_t number) {
     // TODO:
     // 1) Allocate <parameter:number> frames of memory
-    // frame_number = allocate_frame(...)
+    int64_t frame_number = allocate_frame((int) number);
     // 2) Find the first page number (virtual) that is not mapped to a frame (physical), and <parameter:number> of them are consecutive
-    // page_number = vm_locate(...)
+    uint64_t page_number = vm_locate((int) number);
     // 3) IGNORE the result of the previous call, and map the frame number to itself
-    // page_number = FRAME_NUMBER (overwrites previous value, for the sake of simulation. See notes below.)
-    // vm_map(page_number, frame_number, number, /* use flags = 0 */);
+    page_number = (uint64_t ) frame_number;
+    vm_map(page_number, (uint64_t) frame_number, (int) number, 0);
     // 4) Return the address of the first byte of the allocated page [see note below]
-    // return PAGE_GET_ADDRESS(page_number);
+    printf("%llu\n", vm_translate(page_number));
+    printf("%llu\n", PAGE_ADDRESS(frame_number));
+    return PAGE_ADDRESS(page_number);
 
     // NOTE:
     // - You are simulating the hardware automatic address translation in software.
@@ -27,8 +32,6 @@ void *palloc(uint64_t number) {
     // Make sure, that in the end of this function:
     // vm_translate(page) is FRAME_ADDRESS(frame) 
 
-    // Dummy code: you cannot use malloc/free
-    return malloc(4196 * number);
 }
 
 void pfree(void *address, uint64_t number) {
