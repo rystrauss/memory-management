@@ -30,24 +30,22 @@ void *palloc(uint64_t number) {
     //   but the hardware would be performing the automatic translation between page_number to frame_number
 
     // Make sure, that in the end of this function:
-    // vm_translate(page) is FRAME_ADDRESS(frame) 
+    // vm_translate(page) is FRAME_ADDRESS(frame)
 
 }
 
 void pfree(void *address, uint64_t number) {
     // TODO:
     // 1) Unmap the page number starting at the provided address (the address is the first byte of a page)
-    //    This means: 
+    //    This means:
     // 2) Do that for the number of times provided in the parameter number
 
-    // page = PAGE_NUMBER(address)
-    // frame = vm_translate(page)
-    //
-    // vm_unmap(page)
-    // deallocate_frame(frame)
+    uint64_t page = (uint64_t) PAGE_NUMBER((char*)address); //FIXME: is it ok for address ot be a char*?
 
-    // Dummy code: you cannot use malloc/free
-    free(address);
+    uint64_t frame = vm_translate(page);
+
+    vm_unmap(page, number);
+    deallocate_frame(frame, number);
 }
 
 void *kmalloc(uint64_t size) {

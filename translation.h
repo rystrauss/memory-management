@@ -25,6 +25,15 @@ extern void *table_root;
  * 3. In a real kernel, the program has access to the computer's entire memory, which begins at address zero, so
  *    summing the base address is actually just adding zero.
  */
+
+/**
+ * 1. We divide by 4096 because that is the size of a frame, so doing this will result in the frame number
+ *    of the given address.
+ * 2. We subtract the base memory address because our memory does not start at zero, like what would happen in an
+ *    actual kernel.
+ * 3. In a real kernel, the program has access to the computer's entire memory, which begins at address zero, so
+ *    subtracting the base address is actually just subtracting zero.
+ */
 #define PAGE_NUMBER(address) ((address - memory) / 4096)
 #define PAGE_ADDRESS(frame) ((memory + (frame * 4096)))
 
