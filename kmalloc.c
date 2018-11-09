@@ -7,21 +7,22 @@
 #include <stdio.h>
 
 #define MAGIC_NUMBER 0xc0dec0de
+#define THRESHOLD 4
 
-uint64_t *head = 0;
+uint64_t *head = (uint64_t *) UINT64_MAX;
 
 void *palloc(uint64_t number) {
     // 1) Allocate <parameter:number> frames of memory
     int64_t frame_number = allocate_frame((int) number);
     if (frame_number == -1) {
-        return 0;
+        return UINT64_MAX;
     }
     // 2) Find the first page number (virtual) that is not mapped to a frame (physical), and <parameter:number> of them are consecutive
     uint64_t page_number = vm_locate((int) number);
     // 3) IGNORE the result of the previous call, and map the frame number to itself
     page_number = (uint64_t) frame_number;
     if (!vm_map(page_number, (uint64_t) frame_number, (int) number, 0)) {
-        return 0;
+        return UINT64_MAX;
     }
     // 4) Return the address of the first byte of the allocated page [see note below]
     return PAGE_ADDRESS(page_number);
@@ -57,26 +58,57 @@ void *kmalloc(uint64_t size) {
     // - Implement a linked list of free chunks using only palloc() [see notes below]
     // - Use the first-fit strategy to allocate a chunk
     if (!head) {
-        uint64_t *address = (uint64_t*) palloc(1);
+        uint64_t *address = (uint64_t *) palloc(1);
         if (!address) {
-            return 0;
+            return (void *) UINT64_MAX;
         }
         *address = 4096 - 2 * sizeof(uint64_t);
         *(address + 1) = 0;
         head = address;
     }
     uint64_t base = head - ((uint64_t) head % 4096);
-    uint64_t *prev = head;
+    uint64_t *prev = UINT64_MAX;
     uint64_t *cur = head;
     while (1) {
-        if (*cur >= size) {
-            if (cur == head) {
-
-                uint64_t next = *(cur + 1);
-                *cur = size;
-                *(cur + 1) = MAGIC_NUMBER;
-                head =
+        // Found space
+        if (*cur <= size) {
+            break;
+        }
+        // At the tail, and have not found free space
+        // Need to palloc a new frame
+        if (!*(cur + 1)) {
+            uint64_t *address = (uint64_t *) palloc(1); // TODO: palloc a big enough number of frames
+            if (!address) {
+                return (void *) UINT64_MAX;
             }
+            *address = 4096 - 2 * sizeof(uint64_t);
+            *(address + 1) = 0;
+            *(cur + 1) = (uint64_t) address;
+            prev = cur;
+            cur = address;
+        }
+            // Check the next free space
+        else {
+            prev = cur;
+            cur = (uint64_t *) *(cur + 1); // TODO: IS THIS RIGHT?
+        }
+    }
+    // At this point, cur is a suitable location to put our stuff
+    if (cur == head) {
+        // If we are using 'all' of the free space
+        if (size >= *cur - THRESHOLD) {
+            *(cur + 1) = MAGIC_NUMBER;
+            // If head is only thing, set head to null, otherwise set to next node
+            head = !*(cur + 1) ? (uint64_t *) UINT64_MAX : (uint64_t *) *(cur + 1);
+            return cur + 2;
+        } else {
+            uint64_t *next = (uint64_t *) *(cur + 1);
+            uint64_t free_space = *cur;
+            *cur = size;
+            *(cur + 1) = MAGIC_NUMBER;
+            head = cur + size + 2;
+            *head = free_space - size - 2;
+            *(head + 1) = (uint64_t) next;
         }
     }
     return malloc(size);
