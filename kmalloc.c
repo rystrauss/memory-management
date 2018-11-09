@@ -1,7 +1,6 @@
 #include "kmalloc.h"
 #include "translation.h"
 #include "frame.h"
-#include "ll_double.h"
 
 // After you are done, you don't need to import it anymore. This is here just for the dummy code on malloc/free.
 #include<stdlib.h>
@@ -9,16 +8,21 @@
 
 #define MAGIC_NUMBER 0xc0dec0de
 
-struct list *free_list = NULL;
+uint64_t *head = 0;
 
 void *palloc(uint64_t number) {
     // 1) Allocate <parameter:number> frames of memory
     int64_t frame_number = allocate_frame((int) number);
+    if (frame_number == -1) {
+        return 0;
+    }
     // 2) Find the first page number (virtual) that is not mapped to a frame (physical), and <parameter:number> of them are consecutive
     uint64_t page_number = vm_locate((int) number);
     // 3) IGNORE the result of the previous call, and map the frame number to itself
     page_number = (uint64_t) frame_number;
-    vm_map(page_number, (uint64_t) frame_number, (int) number, 0);
+    if (!vm_map(page_number, (uint64_t) frame_number, (int) number, 0)) {
+        return 0;
+    }
     // 4) Return the address of the first byte of the allocated page [see note below]
     return PAGE_ADDRESS(page_number);
 
@@ -52,19 +56,28 @@ void pfree(void *address, uint64_t number) {
 void *kmalloc(uint64_t size) {
     // - Implement a linked list of free chunks using only palloc() [see notes below]
     // - Use the first-fit strategy to allocate a chunk
-    if (!free_list) {
-        ll_init(free_list);
-        uint64_t *address = palloc(1);
+    if (!head) {
+        uint64_t *address = (uint64_t*) palloc(1);
+        if (!address) {
+            return 0;
+        }
         *address = 4096 - 2 * sizeof(uint64_t);
         *(address + 1) = 0;
-        ll_insert_head(free_list, address);
+        head = address;
     }
-    struct node *cur = free_list->head;
-    while (!cur) {
-        if (*((uint64_t *) cur->data + 1) != MAGIC_NUMBER) {
+    uint64_t base = head - ((uint64_t) head % 4096);
+    uint64_t *prev = head;
+    uint64_t *cur = head;
+    while (1) {
+        if (*cur >= size) {
+            if (cur == head) {
 
+                uint64_t next = *(cur + 1);
+                *cur = size;
+                *(cur + 1) = MAGIC_NUMBER;
+                head =
+            }
         }
-        cur = *((uint64_t *) cur->data + 1);
     }
     return malloc(size);
 }

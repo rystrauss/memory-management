@@ -120,5 +120,6 @@ uint64_t vm_translate(uint64_t virtual_address) {
     if (!next->flags) {
         return UINT64_MAX;
     }
-    return next->address;
+    uint64_t offset_mask = (uint64_t) 0b111111111111 << 36;
+    return next->address + (virtual_address & offset_mask);
 }
