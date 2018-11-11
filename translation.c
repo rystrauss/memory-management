@@ -79,22 +79,28 @@ uint64_t vm_locate(int number) {
     }
     uint64_t start = 0;
     int consecutive = 0;
-    for (uint64_t page = 0; page < MAXPAGES; ++page) {
-        if (consecutive == number) {
+    uint64_t pages_found = 1;
+    for (uint64_t page = 0; page < MAXPAGES; page += pages_found) {
+        if (consecutive >= number) {
             return start;
         }
         entry *cur = root_table;
+        pages_found = 1;
         for (int i = 0; i < 3; ++i) {
             uint64_t index = (page >> (3 - i) * 9) & 0b111111111;
             entry *next = cur + index;
+            if (!next->flags) {
+                for (int j = 0; j < 3 - i; ++j) pages_found *= 512;
+                break;
+            }
             cur = (entry *) next->address;
         }
         uint64_t index = page & 0b111111111;
-        if (!(cur + index)->flags) {
+        if (!(cur + index)->flags || pages_found > 1) {
             if (!consecutive) {
                 start = page;
             }
-            consecutive++;
+            consecutive += pages_found;
         } else {
             consecutive = 0;
         }

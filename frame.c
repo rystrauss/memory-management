@@ -15,6 +15,8 @@ uint64_t frames_allocated;
 
 uint64_t frames_available;
 
+int initialized = 0;
+
 // No need to change or initialize this. This is "empty" space that simulate your physical memory.
 _Alignas(4096) char memory[MEMORY_SIZE];
 
@@ -42,6 +44,10 @@ void frame_init() {
 }
 
 int64_t allocate_frame(int number_frames) {
+    if (!initialized) {
+        frame_init();
+        initialized = 1;
+    }
     // Consult the bitmap and return the first available frame number, marking it as allocated
     // Increase the frames_allocated, decrease frames_available
     if (!frames_available)

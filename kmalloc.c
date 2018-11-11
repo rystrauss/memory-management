@@ -15,14 +15,14 @@ void *palloc(uint64_t number) {
     // 1) Allocate <parameter:number> frames of memory
     int64_t frame_number = allocate_frame((int) number);
     if (frame_number == -1) {
-        return UINT64_MAX;
+        return (void *) UINT64_MAX;
     }
     // 2) Find the first page number (virtual) that is not mapped to a frame (physical), and <parameter:number> of them are consecutive
     uint64_t page_number = vm_locate((int) number);
     // 3) IGNORE the result of the previous call, and map the frame number to itself
     page_number = (uint64_t) frame_number;
     if (!vm_map(page_number, (uint64_t) frame_number, (int) number, 0)) {
-        return UINT64_MAX;
+        return (void *) UINT64_MAX;
     }
     // 4) Return the address of the first byte of the allocated page [see note below]
     return PAGE_ADDRESS(page_number);
@@ -50,38 +50,38 @@ void pfree(void *address, uint64_t number) {
 
     uint64_t frame = vm_translate(page);
 
-    vm_unmap(page, number);
-    deallocate_frame((uint64_t) FRAME_NUMBER((char *) frame), number);
+    vm_unmap(page, (int) number);
+    deallocate_frame((uint64_t) FRAME_NUMBER((char *) frame), (int) number);
 }
 
 void *kmalloc(uint64_t size) {
     // - Implement a linked list of free chunks using only palloc() [see notes below]
     // - Use the first-fit strategy to allocate a chunk
-    if (!head) {
+    if (head == (uint64_t *) UINT64_MAX) {
         uint64_t *address = (uint64_t *) palloc(1);
-        if (!address) {
-            return (void *) UINT64_MAX;
+        if (address == (uint64_t *) UINT64_MAX) {
+            return 0;
         }
         *address = 4096 - 2 * sizeof(uint64_t);
         *(address + 1) = 0;
         head = address;
     }
-    uint64_t base = head - ((uint64_t) head % 4096);
-    uint64_t *prev = UINT64_MAX;
+    uint64_t *prev = (uint64_t *) UINT64_MAX;
     uint64_t *cur = head;
     while (1) {
         // Found space
-        if (*cur <= size) {
+        if (*cur >= size) {
             break;
         }
         // At the tail, and have not found free space
         // Need to palloc a new frame
         if (!*(cur + 1)) {
-            uint64_t *address = (uint64_t *) palloc(1); // TODO: palloc a big enough number of frames
-            if (!address) {
-                return (void *) UINT64_MAX;
+            uint64_t num_frames = (size / 4096) + ((size % 4096) ? 1 : 0);
+            uint64_t *address = (uint64_t *) palloc(num_frames);
+            if (address == (uint64_t *) UINT64_MAX) {
+                return 0;
             }
-            *address = 4096 - 2 * sizeof(uint64_t);
+            *address = 4096 * num_frames - 2 * sizeof(uint64_t);
             *(address + 1) = 0;
             *(cur + 1) = (uint64_t) address;
             prev = cur;
@@ -90,7 +90,7 @@ void *kmalloc(uint64_t size) {
             // Check the next free space
         else {
             prev = cur;
-            cur = (uint64_t *) *(cur + 1); // TODO: IS THIS RIGHT?
+            cur = (uint64_t *) *(cur + 1);
         }
     }
     // At this point, cur is a suitable location to put our stuff
@@ -101,7 +101,9 @@ void *kmalloc(uint64_t size) {
             // If head is only thing, set head to null, otherwise set to next node
             head = !*(cur + 1) ? (uint64_t *) UINT64_MAX : (uint64_t *) *(cur + 1);
             return cur + 2;
-        } else {
+        }
+            // Part of the head
+        else {
             uint64_t *next = (uint64_t *) *(cur + 1);
             uint64_t free_space = *cur;
             *cur = size;
@@ -109,9 +111,30 @@ void *kmalloc(uint64_t size) {
             head = cur + size + 2;
             *head = free_space - size - 2;
             *(head + 1) = (uint64_t) next;
+            return cur + 2;
         }
     }
-    return malloc(size);
+        // If not the head
+    else {
+        // If we are using 'all' of the free space
+        if (size >= *cur - THRESHOLD) {
+            *(prev + 1) = *(cur + 1);
+            *(cur + 1) = MAGIC_NUMBER;
+            return cur + 2;
+        }
+            // Part of the node
+        else {
+            uint64_t *next = (uint64_t *) *(cur + 1);
+            uint64_t free_space = *cur;
+            *cur = size;
+            *(cur + 1) = MAGIC_NUMBER;
+            cur += size + 2; // FIXME: This gives a bad access error when trying to malloc a lot of space
+            *cur = free_space - size - 2;
+            *(cur + 1) = (uint64_t) next;
+            *(prev + 1) = (uint64_t) cur;
+            return cur + 2;
+        }
+    }
 }
 
 void *krealloc(void *address, uint64_t size) {
@@ -131,7 +154,20 @@ void kfree(void *address) {
     // TODO:
     // - Make the space used by the address free
     // - Return any frames that have become unused with vm_unmap() and frame_deallocate()
+    if (*((uint64_t *) address - 1) != MAGIC_NUMBER) {
+        return; //TODO: how do we check if free failed?
+    }
 
-    // Dummy code: you cannot use malloc/free/realloc
-    return free(address);
+    // Locate the free node before the space we are freeing
+    uint64_t *cur = head;
+    while (*(cur + 1) < (uint64_t) address - 2) {
+        cur = (uint64_t *) *(cur + 1);
+    }
+
+    // Free the address and update the pointers
+    *((uint64_t *) address + 1) = (uint64_t) *(cur + 1);
+    *(cur + 1) = (uint64_t) address - 2;
+
+    // Coalesce ;_;
+
 }

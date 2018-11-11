@@ -4,11 +4,11 @@
 #include <stdio.h>
 
 int main() {
-    frame_init();
-    for (int i = 0; i < 10; ++i) {
-        vm_map(i, i, 1, 0);
-    }
-    void* address = palloc(4);
-    pfree(address + 1, 2);
+    int *p = (int *)kmalloc(4 * sizeof(int));
+    printf("%p\n", p);
+    kfree(p);
+    p = (int *)kmalloc(4 * sizeof(int));
+    printf("%p\n", p);
+    kfree(p);
     return 0;
 }
