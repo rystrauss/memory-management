@@ -4,11 +4,12 @@
 #include <stdio.h>
 
 int main() {
-    int *p = (int *)kmalloc(4 * sizeof(int));
-    printf("%p\n", p);
-    kfree(p);
-    p = (int *)kmalloc(4 * sizeof(int));
-    printf("%p\n", p);
-    kfree(p);
+    int *a = (int *)kmalloc(4 * sizeof(int));
+    int *b = (int *)kmalloc(4 * sizeof(int));
+    int *c = (int *)kmalloc(4 * sizeof(int));
+    int *d = (int *)kmalloc(4 * sizeof(int));
+    kfree(b);
+    kfree(c);
+    printf("%p\n", a);
     return 0;
 }

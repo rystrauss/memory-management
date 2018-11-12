@@ -151,23 +151,68 @@ void *krealloc(void *address, uint64_t size) {
 }
 
 void kfree(void *address) {
-    // TODO:
     // - Make the space used by the address free
     // - Return any frames that have become unused with vm_unmap() and frame_deallocate()
-    if (*((uint64_t *) address - 1) != MAGIC_NUMBER) {
-        return; //TODO: how do we check if free failed?
+
+    if (head > (uint64_t *) (address - 2)) {
+        *((uint64_t *) (address - 1)) = *head;
+        uint64_t *next = (uint64_t *) *(head + 1);
+        head = address - 2;
+
+        // Coalesce
+        if (head + 2 + *head == address - 2) {
+            *head += 2 + *((uint64_t *) (address - 2));
+            *(head + 1) = (uint64_t) next;
+        }
     }
+        // Locate the free node before the space we are freeing
+    else {
+        uint64_t *cur = head;
+        while (*(cur + 1) && *(cur + 1) < (uint64_t) address - 2) {
+            cur = (uint64_t *) *(cur + 1);
+        }
+        uint64_t *next = (uint64_t *) *(cur + 1);
 
-    // Locate the free node before the space we are freeing
-    uint64_t *cur = head;
-    while (*(cur + 1) < (uint64_t) address - 2) {
-        cur = (uint64_t *) *(cur + 1);
+        // Free the address and update the pointers
+        *((uint64_t *) address + 1) = next ? *next : 0;
+        *(cur + 1) = (uint64_t) address - 2;
+
+        // Coalesce
+        // If the freed space is adjacent to the free node before it
+        if ((cur + *cur + 2) == address - 2) {
+            *cur += *((uint64_t *) address - 2) + 2;
+            *(cur + 1) = (uint64_t) next;
+
+            // If the next node is right after
+            if ((cur + *cur + 2) == next) {
+                *cur += *next + 2;
+                *(cur + 1) = (uint64_t) *(next + 2);
+            }
+
+            uint64_t *front = cur + (4096 - (uint64_t) cur % 4096);
+            uint64_t *end = (cur + *cur + 2) - ((uint64_t) cur % 4096);
+
+            // If space is bigger than a page, we can pfree
+            if ((uint64_t) end - (uint64_t) front >= 4096) {
+                uint64_t num_pages = ((uint64_t) end - (uint64_t) front) / 4096;
+                pfree((void *) front, num_pages);
+            }
+        }
+            // Freed space and next node are adjacent
+        else if (address + *((uint64_t *) address - 2) == next) {
+            *((uint64_t *) address - 2) += *next + 2;
+            *((uint64_t *) address - 1) = *(next + 1);
+
+            uint64_t *front = (uint64_t *) address + (4096 - (uint64_t) (uint64_t *) address % 4096);
+            uint64_t *end =
+                    ((uint64_t *) address + *(uint64_t *) address + 2) - ((uint64_t) (uint64_t *) address % 4096);
+
+            // If space is bigger than a page, we can pfree
+            if ((uint64_t) end - (uint64_t) front >= 4096) {
+                uint64_t num_pages = ((uint64_t) end - (uint64_t) front) / 4096;
+                pfree((void *) front, num_pages);
+            }
+        }
     }
-
-    // Free the address and update the pointers
-    *((uint64_t *) address + 1) = (uint64_t) *(cur + 1);
-    *(cur + 1) = (uint64_t) address - 2;
-
-    // Coalesce ;_;
 
 }
