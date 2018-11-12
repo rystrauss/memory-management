@@ -7,7 +7,8 @@
 #include <stdio.h>
 
 #define MAGIC_NUMBER 0xc0dec0de
-#define THRESHOLD 4
+#define HEADER_SIZE (2 * sizeof(uint64_t))
+#define THRESHOLD (2 * HEADER_SIZE)
 
 uint64_t *head = (uint64_t *) UINT64_MAX;
 
@@ -81,7 +82,7 @@ void *kmalloc(uint64_t size) {
             if (address == (uint64_t *) UINT64_MAX) {
                 return 0;
             }
-            *address = 4096 * num_frames - 2 * sizeof(uint64_t);
+            *address = (4096 * num_frames) - (2 * sizeof(uint64_t));
             *(address + 1) = 0;
             *(cur + 1) = (uint64_t) address;
             prev = cur;
@@ -96,10 +97,10 @@ void *kmalloc(uint64_t size) {
     // At this point, cur is a suitable location to put our stuff
     if (cur == head) {
         // If we are using 'all' of the free space
-        if (size >= *cur - THRESHOLD) {
-            *(cur + 1) = MAGIC_NUMBER;
+        if (*cur - size <= THRESHOLD) {
             // If head is only thing, set head to null, otherwise set to next node
             head = !*(cur + 1) ? (uint64_t *) UINT64_MAX : (uint64_t *) *(cur + 1);
+            *(cur + 1) = MAGIC_NUMBER;
             return cur + 2;
         }
             // Part of the head
@@ -108,8 +109,8 @@ void *kmalloc(uint64_t size) {
             uint64_t free_space = *cur;
             *cur = size;
             *(cur + 1) = MAGIC_NUMBER;
-            head = cur + size + 2;
-            *head = free_space - size - 2;
+            head = (uint64_t *) ((char *) cur + size + HEADER_SIZE);
+            *head = free_space - size - HEADER_SIZE;
             *(head + 1) = (uint64_t) next;
             return cur + 2;
         }
@@ -117,7 +118,7 @@ void *kmalloc(uint64_t size) {
         // If not the head
     else {
         // If we are using 'all' of the free space
-        if (size >= *cur - THRESHOLD) {
+        if (*cur - size <= THRESHOLD) {
             *(prev + 1) = *(cur + 1);
             *(cur + 1) = MAGIC_NUMBER;
             return cur + 2;
@@ -128,8 +129,8 @@ void *kmalloc(uint64_t size) {
             uint64_t free_space = *cur;
             *cur = size;
             *(cur + 1) = MAGIC_NUMBER;
-            cur += size + 2; // FIXME: This gives a bad access error when trying to malloc a lot of space
-            *cur = free_space - size - 2;
+            cur = (uint64_t *) ((char *) cur + size + HEADER_SIZE);
+            *cur = free_space - size - HEADER_SIZE;
             *(cur + 1) = (uint64_t) next;
             *(prev + 1) = (uint64_t) cur;
             return cur + 2;
