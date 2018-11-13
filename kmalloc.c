@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "kmalloc.h"
 #include "translation.h"
 #include "frame.h"
@@ -146,6 +148,23 @@ void *krealloc(void *address, uint64_t size) {
     // - If the address is becomming bigger, but it is not possible to allocate new contigous pages to extend the chunk size,
     //   use kmallloc() to allocate a new chunk, then use memcpy() to copy the original bytes to the new chunk, and return the new chunk's address.
     //   Before returning, free the old chunk (by merging their free space to another header)
+
+    // Need to move to a new chunk of memory
+    if (*((uint64_t *) address) < size) {
+        uint64_t *new_location = kmalloc(size);
+        memcpy(new_location, address, *((uint64_t *) address));
+        kfree(address);
+    }
+    else {
+        uint64_t primordial_size = *((uint64_t *) address); // The size of the original node
+        *((uint64_t *) address) = size; // TODO: Should we lie to the user?
+
+        // We only make a new node if there is room to fit stuff
+        if ((char) (primordial_size - size - HEADER_SIZE) > 0) {
+            *((char *) address + HEADER_SIZE + size) = (char) (primordial_size - size - HEADER_SIZE);
+            // TODO: Update points to this new free node
+        }
+    }
 
     // Dummy code: you cannot use malloc/free/realloc
     return realloc(address, size);
