@@ -111,7 +111,7 @@ void *kmalloc(uint64_t size) {
             uint64_t free_space = *cur;
             *cur = size;
             *(cur + 1) = MAGIC_NUMBER;
-            head = (uint64_t *) ((char *) cur + size + HEADER_SIZE);
+            head = (uint64_t *) (((char *) cur) + size + HEADER_SIZE);
             *head = free_space - size - HEADER_SIZE;
             *(head + 1) = (uint64_t) next;
             return cur + 2;
@@ -131,7 +131,7 @@ void *kmalloc(uint64_t size) {
             uint64_t free_space = *cur;
             *cur = size;
             *(cur + 1) = MAGIC_NUMBER;
-            cur = (uint64_t *) ((char *) cur + size + HEADER_SIZE);
+            cur = (uint64_t *) (((char *) cur) + size + HEADER_SIZE);
             *cur = free_space - size - HEADER_SIZE;
             *(cur + 1) = (uint64_t) next;
             *(prev + 1) = (uint64_t) cur;
@@ -154,85 +154,40 @@ void *krealloc(void *address, uint64_t size) {
         uint64_t *new_location = kmalloc(size);
         memcpy(new_location, address, *((uint64_t *) address));
         kfree(address);
-    }
-    else {
+        return (void *) (new_location + 2);
+    } else {
         uint64_t primordial_size = *((uint64_t *) address); // The size of the original node
-        *((uint64_t *) address) = size; // TODO: Should we lie to the user?
-
-        // We only make a new node if there is room to fit stuff
-        if ((char) (primordial_size - size - HEADER_SIZE) > 0) {
-            *((char *) address + HEADER_SIZE + size) = (char) (primordial_size - size - HEADER_SIZE);
-            // TODO: Update points to this new free node
+        if (primordial_size - size > THRESHOLD) {
+            *((uint64_t *) (address - 2)) = size;
+            *((uint64_t *) (address + size + sizeof(uint64_t))) = (uint64_t) head;
+            head = (uint64_t *) (address + size);
         }
+        return address;
     }
-
-    // Dummy code: you cannot use malloc/free/realloc
-    return realloc(address, size);
 }
 
 void kfree(void *address) {
     // - Make the space used by the address free
     // - Return any frames that have become unused with vm_unmap() and frame_deallocate()
-
-    if (head > (uint64_t *) (address - 2)) {
-        *((uint64_t *) (address - 1)) = *head;
-        uint64_t *next = (uint64_t *) *(head + 1);
-        head = address - 2;
-
-        // Coalesce
-        if (head + 2 + *head == address - 2) {
-            *head += 2 + *((uint64_t *) (address - 2));
-            *(head + 1) = (uint64_t) next;
+    uint64_t *cur = head;
+    while (*(cur + 1)) {
+        // If the current node is right before the address
+        if (cur + *cur + HEADER_SIZE == address - HEADER_SIZE) {
+            *cur += *((uint64_t *) (address - 2)) + HEADER_SIZE;
+            if (cur + *cur == (uint64_t *) *(cur + 1)) {
+                *cur += *((uint64_t *) *(cur + 1));
+                *(cur + 1) = *((uint64_t *) *(cur + 1) + 1);
+            }
+            return;
         }
+        // If the current node is right after the address
+        if (cur == address + *((uint64_t *) address - 2)) {
+            *((uint64_t *) address - 2) += *cur + HEADER_SIZE;
+            *((uint64_t *) address - 1) = *(cur + 1);
+            return;
+        }
+        cur = (uint64_t *) *(cur + 1);
     }
-        // Locate the free node before the space we are freeing
-    else {
-        uint64_t *cur = head;
-        while (*(cur + 1) && *(cur + 1) < (uint64_t) address - 2) {
-            cur = (uint64_t *) *(cur + 1);
-        }
-        uint64_t *next = (uint64_t *) *(cur + 1);
-
-        // Free the address and update the pointers
-        *((uint64_t *) address + 1) = next ? *next : 0;
-        *(cur + 1) = (uint64_t) address - 2;
-
-        // Coalesce
-        // If the freed space is adjacent to the free node before it
-        if ((cur + *cur + 2) == address - 2) {
-            *cur += *((uint64_t *) address - 2) + 2;
-            *(cur + 1) = (uint64_t) next;
-
-            // If the next node is right after
-            if ((cur + *cur + 2) == next) {
-                *cur += *next + 2;
-                *(cur + 1) = (uint64_t) *(next + 2);
-            }
-
-            uint64_t *front = cur + (4096 - (uint64_t) cur % 4096);
-            uint64_t *end = (cur + *cur + 2) - ((uint64_t) cur % 4096);
-
-            // If space is bigger than a page, we can pfree
-            if ((uint64_t) end - (uint64_t) front >= 4096) {
-                uint64_t num_pages = ((uint64_t) end - (uint64_t) front) / 4096;
-                pfree((void *) front, num_pages);
-            }
-        }
-            // Freed space and next node are adjacent
-        else if (address + *((uint64_t *) address - 2) == next) {
-            *((uint64_t *) address - 2) += *next + 2;
-            *((uint64_t *) address - 1) = *(next + 1);
-
-            uint64_t *front = (uint64_t *) address + (4096 - (uint64_t) (uint64_t *) address % 4096);
-            uint64_t *end =
-                    ((uint64_t *) address + *(uint64_t *) address + 2) - ((uint64_t) (uint64_t *) address % 4096);
-
-            // If space is bigger than a page, we can pfree
-            if ((uint64_t) end - (uint64_t) front >= 4096) {
-                uint64_t num_pages = ((uint64_t) end - (uint64_t) front) / 4096;
-                pfree((void *) front, num_pages);
-            }
-        }
-    }
-
+    *((uint64_t *) (address - 1)) = (uint64_t) head;
+    head = (uint64_t *) (address - 2);
 }
